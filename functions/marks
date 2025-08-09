@@ -1,27 +1,23 @@
 #!/usr/bin/env zsh
 
-# Initialize color variables if missing
+# Initialize color variables
 typeset -gA c
 : ${c[reset]:=$'\e[0m'}
 : ${c[green]:=$'\e[32m'}
-: ${c[blue]:=$'\e[34m'}   # Default for bookmark names
-: ${c[magenta]:=$'\e[35m'} # Default for paths
+: ${c[blue]:=$'\e[34m'}   # For paths
+: ${c[cyan]:=$'\e[36m'}   # For bookmark names
 
-# Define fallback colorizing functions if missing
-if ! typeset -f @bookmark_name_colorize >/dev/null; then
-  @bookmark_name_colorize() { print -n -- "${c[blue]}$1${c[reset]}" }
-fi
-
-if ! typeset -f @bookmark_path_colorize >/dev/null; then
-  @bookmark_path_colorize() { print -n -- "${c[magenta]}$1${c[reset]}" }
-fi
+# Fixed color application
+@bookmark_name_colorize() { print -n -- "${c[blue]}$1${c[reset]}" }
+@bookmark_path_colorize() { print -n -- "${c[cyan]}$1${c[reset]}" }
 
 local bookmark_file="$(<"$ZPM_BOOKMARKS_FILE")"
 local bookmark_path
 local bookmark_name
-local output_sep=" ${c[green]}➔${c[reset]} "  # Changed to green arrow separator
+local output_sep=" ${c[green]}➔${c[reset]} "  # Green arrow separator
 
 if [[ -n "$1" ]]; then
+  # For single bookmark lookup
   @bookmark_path_colorize "$(grep -E "\|${1}$" <<< "$bookmark_file" | awk -F'|' '{print $1}')"
   echo
 else
@@ -32,16 +28,18 @@ else
     [[ -n "$bookmark_name" ]] && (( ${#bookmark_name} > max_name_width )) && max_name_width=${#bookmark_name}
   done <<< "$bookmark_file"
 
-  # Second pass: print aligned output with improved formatting
+  # Second pass: print aligned output with correct colors
   while IFS= read -r line; do
     bookmark_path="${line%|*}"
     bookmark_name="${line#*|}"
 
     if [[ -n "$bookmark_path" && -n "$bookmark_name" ]]; then
+      # Apply colors directly to the correct elements
       local colored_name="$(@bookmark_name_colorize $bookmark_name)"
       local colored_path="$(@bookmark_path_colorize $bookmark_path)"
       local padding_width=$(( max_name_width - ${#bookmark_name} ))
-      # Added indentation and better spacing
+      
+      # Print with proper formatting
       printf "  %s%${padding_width}s%s %s\n" "$colored_name" "" "$output_sep" "$colored_path"
     fi
   done <<< "$bookmark_file"

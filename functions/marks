@@ -3,12 +3,12 @@
 # Initialize color variables
 typeset -gA c
 : ${c[reset]:=$'\e[0m'}
-: ${c[blue]:=$'\e[38;5;75m'}       # Bookmark names
-: ${c[cyan]:=$'\e[38;5;87m'}       # Paths
-: ${c[green]:=$'\e[38;5;85m'}      # Arrow separator
-: ${c[border]:=$'\e[38;5;239m'}    # Border color
-: ${c[header]:=$'\e[38;5;228m'}    # Header text
-: ${c[count]:=$'\e[38;5;245m'}     # Count color
+: ${c[blue]:=$'\e[38;5;33m'}       # Solarized blue (bookmark names)
+: ${c[cyan]:=$'\e[38;5;37m'}       # Solarized cyan (paths)
+: ${c[green]:=$'\e[38;5;64m'}      # Solarized green (arrow separator)
+: ${c[border]:=$'\e[38;5;59m'}     # Solarized base01 (border)
+: ${c[header]:=$'\e[38;5;136m'}    # Solarized yellow (header text)
+: ${c[count]:=$'\e[38;5;247m'}     # Solarized base0 (count color)
 
 # Bookmark colorizing functions
 @bookmark_name_colorize() { print -n -- "${c[blue]}$1${c[reset]}" }
@@ -149,3 +149,5 @@ else
     # Print bottom border
     print -- "$bottom_border"
 fi
+
+# vim: ft=bash:

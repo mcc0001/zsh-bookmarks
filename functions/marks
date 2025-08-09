@@ -9,35 +9,23 @@ if [[ -n "$1" ]]; then
   @bookmark_path_colorize "$(grep -E "\|${1}$" <<< "$bookmark_file" | awk -F'|' '{print $1}')"
   echo
 else
-  echo "$bookmark_file" | while read line; do
+  # First pass: compute max name width
+  local max_name_width=0
+  while IFS= read -r line; do
+    bookmark_name="${line#*|}"
+    [[ -n "$bookmark_name" ]] && (( ${#bookmark_name} > max_name_width )) && max_name_width=${#bookmark_name}
+  done <<< "$bookmark_file"
+
+  # Second pass: print aligned output
+  while IFS= read -r line; do
     bookmark_path="${line%|*}"
     bookmark_name="${line#*|}"
 
     if [[ -n "$bookmark_path" && -n "$bookmark_name" ]]; then
-      # Get colorized values
       local colored_name="$(@bookmark_name_colorize $bookmark_name)"
       local colored_path="$(@bookmark_path_colorize $bookmark_path)"
-      
-      # Use awk for consistent column alignment
-      awk -v name="$colored_name" -v path="$colored_path" -v sep="$output_sep" '
-        BEGIN {
-          # Remove ANSI codes for width calculation
-          clean_name = name
-          gsub(/\033\[[0-9;]*m/, "", clean_name)
-          clean_path = path
-          gsub(/\033\[[0-9;]*m/, "", clean_path)
-
-          # Calculate column widths
-          name_width = length(clean_name)
-          path_width = length(clean_path)
-          total_width = name_width + path_width + 4
-
-          # Format output with original colors
-          printf "%s%s%s\n", 
-            name,
-            sep,
-            path
-        }'
+      local padding_width=$(( max_name_width - ${#bookmark_name} ))
+      printf "%s%${padding_width}s%s%s\n" "$colored_name" "" "$output_sep" "$colored_path"
     fi
-  done
+  done <<< "$bookmark_file"
 fi

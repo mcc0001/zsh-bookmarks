@@ -3,44 +3,149 @@
 # Initialize color variables
 typeset -gA c
 : ${c[reset]:=$'\e[0m'}
-: ${c[green]:=$'\e[32m'}
-: ${c[blue]:=$'\e[34m'}   # For paths
-: ${c[cyan]:=$'\e[36m'}   # For bookmark names
+: ${c[blue]:=$'\e[38;5;75m'}       # Bookmark names
+: ${c[cyan]:=$'\e[38;5;87m'}       # Paths
+: ${c[green]:=$'\e[38;5;85m'}      # Arrow separator
+: ${c[border]:=$'\e[38;5;239m'}    # Border color
+: ${c[header]:=$'\e[38;5;228m'}    # Header text
+: ${c[count]:=$'\e[38;5;245m'}     # Count color
 
-# Fixed color application
+# Bookmark colorizing functions
 @bookmark_name_colorize() { print -n -- "${c[blue]}$1${c[reset]}" }
 @bookmark_path_colorize() { print -n -- "${c[cyan]}$1${c[reset]}" }
 
+# Helper to calculate visible length (ignoring escape codes)
+@visible_length() {
+    local str="${1//$'\e'\[[0-9;]*m/}"
+    print -n -- ${#str}
+}
+
+# Function to generate horizontal line
+@generate_horizontal() {
+    local length=$1
+    local char=${2:-─}
+    local line=""
+    for ((i=0; i<length; i++)); do
+        line+="$char"
+    done
+    print -n -- "$line"
+}
+
+# Validate bookmark file existence
+if [[ -z "$ZPM_BOOKMARKS_FILE" || ! -f "$ZPM_BOOKMARKS_FILE" ]]; then
+    print -u2 "Bookmarks file not found"
+    exit 1
+fi
+
 local bookmark_file="$(<"$ZPM_BOOKMARKS_FILE")"
-local bookmark_path
-local bookmark_name
-local output_sep=" ${c[green]}➔${c[reset]} "  # Green arrow separator
+local bookmark_path bookmark_name
+local output_sep="${c[green]} ➔ ${c[reset]}"  # Arrow separator
 
 if [[ -n "$1" ]]; then
-  # For single bookmark lookup
-  @bookmark_path_colorize "$(grep -E "\|${1}$" <<< "$bookmark_file" | awk -F'|' '{print $1}')"
-  echo
+    # Single bookmark lookup
+    @bookmark_path_colorize "$(grep -E "\|${1}$" <<< "$bookmark_file" | awk -F'|' '{print $1}')"
+    echo
 else
-  # First pass: compute max name width
-  local max_name_width=0
-  while IFS= read -r line; do
-    bookmark_name="${line#*|}"
-    [[ -n "$bookmark_name" ]] && (( ${#bookmark_name} > max_name_width )) && max_name_width=${#bookmark_name}
-  done <<< "$bookmark_file"
-
-  # Second pass: print aligned output with correct colors
-  while IFS= read -r line; do
-    bookmark_path="${line%|*}"
-    bookmark_name="${line#*|}"
-
-    if [[ -n "$bookmark_path" && -n "$bookmark_name" ]]; then
-      # Apply colors directly to the correct elements
-      local colored_name="$(@bookmark_name_colorize $bookmark_name)"
-      local colored_path="$(@bookmark_path_colorize $bookmark_path)"
-      local padding_width=$(( max_name_width - ${#bookmark_name} ))
-      
-      # Print with proper formatting
-      printf "  %s%${padding_width}s%s %s\n" "$colored_name" "" "$output_sep" "$colored_path"
-    fi
-  done <<< "$bookmark_file"
+    # Parse into array
+    local -a lines=("${(f)bookmark_file}")
+    local total_bookmarks=${#lines}
+    
+    # Compute max widths
+    local max_name_width=0
+    local max_path_width=0
+    for line in "${lines[@]}"; do
+        bookmark_name="${line#*|}"
+        bookmark_path="${line%|*}"
+        [[ -n "$bookmark_name" ]] && (( $(@visible_length "$bookmark_name") > max_name_width )) && max_name_width=$(@visible_length "$bookmark_name")
+        [[ -n "$bookmark_path" ]] && (( $(@visible_length "$bookmark_path") > max_path_width )) && max_path_width=$(@visible_length "$bookmark_path")
+    done
+    
+    # Calculate dimensions
+    local content_width=$(( max_name_width + max_path_width + 3 ))
+    local min_width=60
+    local max_width=$(( COLUMNS > 10 ? COLUMNS - 4 : 80 ))
+    (( content_width < min_width )) && content_width=$min_width
+    (( content_width > max_width )) && content_width=$max_width
+    
+    # Border elements
+    local top_left="╭"
+    local top_right="╮"
+    local bottom_left="╰"
+    local bottom_right="╯"
+    local vertical="│"
+    local divider="├"
+    local right_div="┤"
+    local horizontal_char="─"
+    
+    # Generate horizontal lines
+    local horizontal_line="${c[border]}$(@generate_horizontal $((content_width + 2)) $horizontal_char)${c[reset]}"
+    local top_border="${c[border]}${top_left}$(@generate_horizontal $((content_width + 2)) $horizontal_char)${top_right}${c[reset]}"
+    local bottom_border="${c[border]}${bottom_left}$(@generate_horizontal $((content_width + 2)) $horizontal_char)${bottom_right}${c[reset]}"
+    local header_divider="${c[border]}${divider}$(@generate_horizontal $((content_width + 2)) $horizontal_char)${right_div}${c[reset]}"
+    
+    # Fixed header alignment - terminal-based method
+    local header_text="${c[header]}📚 Bookmarks ${c[count]}($total_bookmarks)${c[reset]}"
+    local total_width=$((content_width + 2))
+    
+    # Print box with properly aligned header
+    print -- "$top_border"
+    
+    # Calculate header position using terminal cursor positioning
+    local header_plain="${header_text//$'\e'\[[0-9;]*m/}"
+    local header_len=${#header_plain}
+    local padding_left=$(( (total_width - header_len) / 2 ))
+    
+    # Build header line with cursor positioning
+    local header_line="${c[border]}${vertical}${c[reset]}"
+    for ((i=0; i < padding_left; i++)); do
+        header_line+=" "
+    done
+    header_line+="${header_text}"
+    
+    # Add remaining spaces to fill the line
+    local current_len=$(( padding_left + header_len ))
+    for ((i=current_len; i < total_width; i++)); do
+        header_line+=" "
+    done
+    
+    header_line+="${c[border]}${vertical}${c[reset]}"
+    print -- "$header_line"
+    print -- "$header_divider"
+    
+    # Print bookmarks
+    local available_path=$(( content_width - max_name_width - 3 ))
+    for line in "${lines[@]}"; do
+        bookmark_path="${line%|*}"
+        bookmark_name="${line#*|}"
+        
+        if [[ -n "$bookmark_path" && -n "$bookmark_name" ]]; then
+            # Apply colors
+            local colored_name="$(@bookmark_name_colorize $bookmark_name)"
+            local colored_path="$(@bookmark_path_colorize $bookmark_path)"
+            local visible_path="${bookmark_path}"
+            
+            # Truncate long paths
+            if (( $(@visible_length "$bookmark_path") > available_path )); then
+                visible_path="${bookmark_path:0:$available_path-1}…"
+            fi
+            colored_path="$(@bookmark_path_colorize "$visible_path")"
+            
+            # Calculate padding
+            local name_pad=$(( max_name_width - $(@visible_length "$bookmark_name") ))
+            local path_pad=$(( content_width - max_name_width - $(@visible_length "$visible_path") - 3 ))
+            (( path_pad < 0 )) && path_pad=0
+            (( name_pad < 0 )) && name_pad=0
+            
+            # Format line
+            printf "${c[border]}${vertical}${c[reset]} %s%${name_pad}s%s%s%${path_pad}s ${c[border]}${vertical}${c[reset]}\n" \
+                "$colored_name" \
+                "" \
+                "$output_sep" \
+                "$colored_path" \
+                ""
+        fi
+    done
+    
+    # Print bottom border
+    print -- "$bottom_border"
 fi

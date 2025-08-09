@@ -92,7 +92,7 @@ else
     
     # Calculate header position using terminal cursor positioning
     local header_plain="${header_text//$'\e'\[[0-9;]*m/}"
-    local header_len=${#header_plain}
+    local header_len=$(( ${#header_plain} + ${#${(M)header_plain:#[^[:ascii:]]}} + 17))
     local padding_left=$(( (total_width - header_len) / 2 ))
     
     # Build header line with cursor positioning

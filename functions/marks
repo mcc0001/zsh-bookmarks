@@ -91,8 +91,21 @@ else
     print -- "$top_border"
 
     # Calculate header position using terminal cursor positioning
-    local header_plain="${header_text//$'\e'\[[0-9;]*m/}"
-    local header_len=$(( ${#header_plain} + ${#${(M)header_plain:#[^[:ascii:]]}} + 17))
+    # Safe header plain text extraction
+    local header_plain="$(echo -n "$header_text" | sed 's/\x1b\[[0-9;]*m//g')"
+    if [[ -z "$header_plain" ]]; then
+        # Fallback header content if parsing fails
+        header_plain="📚 Bookmarks ($total_bookmarks)"
+    fi
+
+    # Accurate non-ASCII character counting
+    local non_ascii_chars=0
+    if (( ${#header_plain} > 0 )); then
+        non_ascii_chars=${#${(M)header_plain:#[^[:ascii:]]}}
+    fi
+
+    # Correct visible length calculation
+    local header_len=$(( ${#header_plain} - non_ascii_chars + 2 * non_ascii_chars + 1 ))
     local padding_left=$(( (total_width - header_len) / 2 ))
 
     # Build header line with cursor positioning
